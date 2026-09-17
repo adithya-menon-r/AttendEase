@@ -41,7 +41,6 @@ AttendEase.Widget = (() => {
 
   const ICONS = {
     refresh: ['M13.5 8a5.5 5.5 0 1 1-1.61-3.89', 'M13.5 2.5V5H11'],
-    chevron: ['M4 6.5 8 10.5l4-4'],
     close: ['m4 4 8 8', 'M12 4l-8 8'],
     sliders: ['M2 5h12', 'M2 11h12', 'M9.5 3v4', 'M5.5 9v4'],
   };
@@ -54,13 +53,18 @@ AttendEase.Widget = (() => {
     static EDGE_MARGIN = 40;
     static WIDTH = 360;
 
+    // shared curve for the bar sweep and the number counting beside it
+    static SWEEP = { duration: 620, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' };
+    static STAGGER = 45;
+
     constructor(handlers = {}) {
       this.handlers = handlers;
       this.host = null;
       this.root = null;
       this.position = { x: 0, y: 0 };
-      this.collapsed = false;
       this.settingsOpen = false;
+      this.cards = new Map();
+      this.signature = null;
       this.onWindowResize = () => this.applyPosition();
     }
 
@@ -104,10 +108,10 @@ AttendEase.Widget = (() => {
           el('div', { class: 'actions' },
             button('settings', 'Settings', ICONS.sliders),
             button('refresh', 'Refresh', ICONS.refresh),
-            button('collapse', 'Collapse', ICONS.chevron),
             button('close', 'Hide', ICONS.close))),
         el('div', { class: 'body' },
-          this.buildSettings(),
+          // wrapper exists so the panel can animate open
+          el('div', { class: 'settings-shell' }, this.buildSettings()),
           el('ul', { class: 'list' })));
     }
 
@@ -151,11 +155,36 @@ AttendEase.Widget = (() => {
       const target = el('span', { class: 'bar__target' });
       return {
         node: el('div', { class: 'bar' }, fill, target),
-        set(percentage, targetPercent) {
-          fill.style.width = `${Math.min(Math.max(percentage, 0), 100)}%`;
+        set(percentage, targetPercent, delay) {
+          const width = `${Math.min(Math.max(percentage, 0), 100)}%`;
           target.style.left = `${targetPercent}%`;
+          fill.style.width = width;
+          if (delay !== undefined && !Widget.reducedMotion()) {
+            fill.animate([{ width: '0%' }, { width }], { ...Widget.SWEEP, delay });
+          }
         },
       };
+    }
+
+    static reducedMotion() {
+      return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    }
+
+    // counts the percentage up alongside its bar, on the same curve
+    static countUp(node, from, to) {
+      node.__stop?.();
+      node.textContent = `${to.toFixed(2)}%`;
+      if (Widget.reducedMotion() || Math.abs(to - from) < 0.01) return;
+      let frame = 0;
+      const started = performance.now();
+      const tick = (now) => {
+        const progress = Math.min(1, (now - started) / Widget.SWEEP.duration);
+        const eased = 1 - (1 - progress) ** 3;
+        node.textContent = `${(from + (to - from) * eased).toFixed(2)}%`;
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+      node.__stop = () => cancelAnimationFrame(frame);
     }
 
     $(selector) {
@@ -167,7 +196,6 @@ AttendEase.Widget = (() => {
         const action = event.target.closest('[data-action]')?.dataset.action;
         if (action === 'refresh') this.handlers.onRefresh?.();
         else if (action === 'settings') this.toggleSettings();
-        else if (action === 'collapse') this.toggleCollapsed();
         else if (action === 'close') this.hide();
       });
 
@@ -262,19 +290,18 @@ AttendEase.Widget = (() => {
       button.setAttribute('aria-label', button.title);
     }
 
-    toggleCollapsed() {
-      this.collapsed = !this.collapsed;
-      this.$('.widget').classList.toggle('is-collapsed', this.collapsed);
-      const button = this.$('[data-action="collapse"]');
-      button.title = this.collapsed ? 'Expand' : 'Collapse';
-      button.setAttribute('aria-label', button.title);
-    }
-
     setRefreshing(refreshing) {
       this.$('.widget')?.classList.toggle('is-refreshing', refreshing);
     }
 
+    replayEntrance() {
+      this.signature = null;
+    }
+
     showSkeleton() {
+      // drop any retained cards so the first real render plays its entrance
+      this.signature = null;
+      this.cards = new Map();
       const rows = [0, 1, 2].map(() => el('div', { class: 'skeleton__row' }));
       this.$('.list').replaceChildren(el('li', { class: 'skeleton' }, ...rows));
     }
@@ -297,40 +324,95 @@ AttendEase.Widget = (() => {
       this.$('.settings__dates').classList.toggle('is-disabled', !internship.enabled);
       this.$('.settings__warning').textContent = state.warning || '';
 
-      this.$('.list').replaceChildren(
-        ...(courses.length === 0
-          ? [el('li', { class: 'status', text: emptyMessage || 'No courses found on this page.' })]
-          : courses.map((course) => this.buildCourse(course, target, includeMedical)))
-      );
+      this.renderCourses(courses, target, includeMedical, emptyMessage);
     }
 
-    buildCourse(course, target, includeMedical) {
+    renderCourses(courses, target, includeMedical, emptyMessage) {
+      const signature = courses.map((course) => course.courseCode).join('|');
+
+      if (signature === this.signature && this.cards?.size === courses.length) {
+        courses.forEach((course) => this.cards.get(course.courseCode)?.update(course, target, includeMedical));
+        return;
+      }
+
+      this.signature = signature;
+      this.cards = new Map();
+
+      if (courses.length === 0) {
+        this.$('.list').replaceChildren(
+          el('li', { class: 'status', text: emptyMessage || 'No courses found on this page.' })
+        );
+        return;
+      }
+
+      const cards = courses.map((course, index) => {
+        const card = this.buildCourse(course, target, includeMedical, index * Widget.STAGGER);
+        this.cards.set(course.courseCode, card);
+        return card.node;
+      });
+      this.$('.list').replaceChildren(...cards);
+    }
+
+    buildCourse(course, target, includeMedical, delay) {
       const bar = this.buildBar();
-      bar.set(course.percentage, target);
+      const pct = el('span', { class: 'course__pct' });
+      const code = el('span', { class: 'course__code' });
+      const name = el('p', { class: 'course__name' });
+      const tally = el('span');
+      const badge = el('span', { class: 'course__od', hidden: true });
+      const absent = el('span');
+      const count = el('span', { class: 'course__count' }, tally, badge, absent);
+      const verdict = el('span', { class: 'course__verdict' },
+        el('span'), el('b'));
 
-      // the badge sits with the tally it modifies rather than by the course code
-      const badge = course.recoveredOD > 0
-        ? el('span', {
-            class: 'course__od',
-            text: `+${course.recoveredOD} OD`,
-            title: `${course.recoveredOD} internship ${course.recoveredOD === 1 ? 'class' : 'classes'}`
-              + ' the portal could not credit',
-          })
-        : null;
-
-      return el('li', { class: `course is-${course.status}` },
-        el('div', { class: 'course__top' },
-          el('span', { class: 'course__code', text: course.courseCode || `Course ${course.serialNumber}` }),
-          el('span', { class: 'course__pct', text: `${course.percentage.toFixed(2)}%` })),
-        el('p', { class: 'course__name', text: course.courseName, title: course.courseName }),
+      const node = el('li', { class: 'course' },
+        el('div', { class: 'course__top' }, code, pct),
+        name,
         bar.node,
-        el('div', { class: 'course__meta' },
-          el('span', { class: 'course__count', title: Widget.describeTally(course, includeMedical) },
-            el('span', { text: `${course.attended}/${course.total}` }),
-            badge,
-            // portal's Absent column still counts OD-approved classes, so we show effectiveAbsent instead
-            el('span', { text: `· ${course.effectiveAbsent} absent` })),
-          Widget.buildVerdict(course)));
+        el('div', { class: 'course__meta' }, count, verdict));
+
+      let shown = 0;
+
+      const update = (next, nextTarget, nextMedical, entering) => {
+        node.className = `course is-${next.status}`;
+        code.textContent = next.courseCode || `Course ${next.serialNumber}`;
+        name.textContent = next.courseName;
+        name.title = next.courseName;
+
+        Widget.countUp(pct, entering ? 0 : shown, next.percentage);
+        shown = next.percentage;
+
+        bar.set(next.percentage, nextTarget, entering ? delay : undefined);
+
+        count.title = Widget.describeTally(next, nextMedical);
+        tally.textContent = `${next.attended}/${next.total}`;
+        absent.textContent = `· ${next.effectiveAbsent} absent`;
+
+        const appearing = badge.hidden && next.recoveredOD > 0;
+        badge.hidden = next.recoveredOD <= 0;
+        if (next.recoveredOD > 0) {
+          badge.textContent = `+${next.recoveredOD} OD`;
+          badge.title = `${next.recoveredOD} internship`
+            + ` ${next.recoveredOD === 1 ? 'class' : 'classes'} the portal could not credit`;
+          if (appearing && !entering && !Widget.reducedMotion()) {
+            badge.animate([{ transform: 'scale(.7)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+              { duration: 200, easing: 'ease-out' });
+          }
+        }
+
+        const below = next.status === 'danger';
+        verdict.firstChild.textContent = below ? 'Attend ' : 'Can skip ';
+        verdict.lastChild.textContent = String(below ? next.recovery : next.bunkable);
+      };
+
+      update(course, target, includeMedical, true);
+
+      if (!Widget.reducedMotion()) {
+        node.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }],
+          { duration: 260, easing: 'ease-out', delay });
+      }
+
+      return { node, update };
     }
 
     // breakdown shown on hover over the tally
@@ -343,11 +425,5 @@ AttendEase.Widget = (() => {
         + ` · portal shows ${course.absent} absent`;
     }
 
-    static buildVerdict(course) {
-      const below = course.status === 'danger';
-      return el('span', { class: 'course__verdict' },
-        el('span', { text: below ? 'Attend ' : 'Can skip ' }),
-        el('b', { text: String(below ? course.recovery : course.bunkable) }));
-    }
   };
 })();

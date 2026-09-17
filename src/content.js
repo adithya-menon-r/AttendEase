@@ -170,6 +170,7 @@
 
   async function refresh() {
     widget.setRefreshing(true);
+    widget.replayEntrance();
     try {
       const table = await waitForTable();
       state.courses = scrape.parse(table);

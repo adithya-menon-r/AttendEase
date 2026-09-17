@@ -44,6 +44,7 @@ AttendEase.css = /* css */ `
 
   --radius: 11px;
   --duration: 140ms;
+  --expand: 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :host([hidden]) { display: none; }
@@ -107,25 +108,47 @@ AttendEase.css = /* css */ `
 .iconbtn:focus-visible { outline: 2px solid var(--shell-text); outline-offset: -2px; }
 .iconbtn svg { width: 15px; height: 15px; display: block; }
 
-.iconbtn[data-action="collapse"] svg { transition: transform var(--duration); }
-.is-collapsed .iconbtn[data-action="collapse"] svg { transform: rotate(180deg); }
+.is-refreshing .iconbtn[data-action="refresh"] svg {
+  animation: spin 900ms linear infinite;
+}
 
-.is-refreshing .iconbtn[data-action="refresh"] { color: var(--shell-hover); }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 /* -------------------------------------------------------------- settings -- */
 
 .body { display: flex; flex-direction: column; min-height: 0; }
-.is-collapsed .body { display: none; }
 
-/* closed by default, so the resting widget is just header plus courses */
-.settings {
-  display: none;
+/* closed by default, so the resting widget is just header plus courses.
+   a grid row animates from 0fr to 1fr; display:none could not be transitioned */
+.settings-shell {
+  display: grid;
+  grid-template-rows: 0fr;
   flex: none;
-  padding: 10px 12px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid transparent;
+  transition: grid-template-rows var(--expand), border-color var(--expand);
 }
 
-.is-settings-open .settings { display: block; }
+.is-settings-open .settings-shell {
+  grid-template-rows: 1fr;
+  border-bottom-color: var(--border);
+}
+
+/* 0fr collapses the content box but not the padding, so the vertical padding
+   has to travel with it or the closed panel leaves a dead band above the list */
+.settings {
+  overflow: hidden;
+  min-height: 0;
+  padding: 0 12px;
+  opacity: 0;
+  transition: opacity 140ms ease, padding var(--expand);
+}
+
+.is-settings-open .settings {
+  padding: 10px 12px 12px;
+  opacity: 1;
+}
 
 .is-settings-open .iconbtn[data-action="settings"] {
   background: var(--shell-hover);
@@ -334,6 +357,8 @@ AttendEase.css = /* css */ `
 }
 
 /* marks a course whose figure includes OD the portal could not show */
+.course__od[hidden] { display: none; }
+
 .course__od {
   flex: none;
   padding: 1px 5px;
@@ -416,8 +441,11 @@ AttendEase.css = /* css */ `
   transition: width 450ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* target line sits above fill so it stays visible on either side */
+/* target line sits above fill so it stays visible on either side.
+   left starts out auto, which is not interpolable, so the first paint places
+   the marker without animating and only later target changes slide. */
 .bar__target {
+  transition: left 320ms cubic-bezier(0.4, 0, 0.2, 1);
   position: absolute;
   top: -1px;
   bottom: -1px;
