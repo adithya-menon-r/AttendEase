@@ -67,8 +67,4 @@ rm -rf "$STAGE"
 
 echo "Built ${XPI#"$PWD"/} ($(du -h "$XPI" | cut -f1))"
 echo
-echo "To install temporarily (works on any Firefox, resets when you restart):"
-echo "  about:debugging#/runtime/this-firefox -> Load Temporary Add-on -> select the .xpi"
-echo
-echo "Chrome and Edge load this checkout directly: chrome://extensions -> Developer mode"
-echo "-> Load unpacked -> select this folder. No build is required."
+echo "Refer to README.md for installation instructions."
