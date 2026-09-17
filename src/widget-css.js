@@ -112,29 +112,117 @@ AttendEase.css = /* css */ `
 
 .is-refreshing .iconbtn[data-action="refresh"] { color: var(--shell-hover); }
 
-/* -------------------------------------------------------------- controls -- */
+/* -------------------------------------------------------------- settings -- */
 
 .body { display: flex; flex-direction: column; min-height: 0; }
 .is-collapsed .body { display: none; }
 
-.controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+/* closed by default, so the resting widget is just header plus courses */
+.settings {
+  display: none;
   flex: none;
-  padding: 8px 12px;
+  padding: 10px 12px 12px;
   border-bottom: 1px solid var(--border);
 }
 
-.field { display: flex; align-items: center; gap: 7px; }
+.is-settings-open .settings { display: block; }
 
-.field__label,
-.switch__label {
+.is-settings-open .iconbtn[data-action="settings"] {
+  background: var(--shell-hover);
+  color: var(--shell-text);
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 26px;
+}
+
+.setting__label {
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+.settings__rule {
+  height: 1px;
+  margin: 10px 0 8px;
+  background: var(--border);
+}
+
+.settings__dates {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  transition: opacity var(--duration);
+}
+
+.settings__dates.is-disabled { opacity: 0.4; }
+
+.datefield {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.datefield__label {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.dateinput {
+  width: 100%;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  transition: border-color var(--duration);
+}
+
+.dateinput:hover:enabled { border-color: var(--text-faint); }
+.dateinput:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.dateinput:disabled { cursor: not-allowed; }
+
+.settings__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.linkbtn {
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background var(--duration), color var(--duration);
+}
+
+.linkbtn:hover { background: var(--track); color: var(--text); }
+.linkbtn:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+
+.settings__warning {
+  margin: 0 0 10px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--warning-text);
+  background: rgba(245, 158, 11, 0.12);
+  border-radius: 6px;
+}
+
+.settings__warning:empty { display: none; }
 
 .select {
   appearance: none;
@@ -157,7 +245,7 @@ AttendEase.css = /* css */ `
 .select:hover { border-color: var(--text-faint); }
 .select:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
 
-.switch { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.switch { display: flex; align-items: center; cursor: pointer; }
 
 .switch input {
   position: absolute;
@@ -245,6 +333,18 @@ AttendEase.css = /* css */ `
   gap: 8px;
 }
 
+/* marks a course whose figure includes OD the portal could not show */
+.course__od {
+  flex: none;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--track);
+  border-radius: 4px;
+}
+
 .course__code {
   font-size: 13px;
   font-weight: 600;
@@ -278,6 +378,10 @@ AttendEase.css = /* css */ `
 }
 
 .course__count {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
   font-size: 11px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;

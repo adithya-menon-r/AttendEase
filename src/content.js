@@ -1,37 +1,74 @@
 (() => {
-  const { calc, scrape, Widget } = globalThis.AttendEase;
+  const { calc, scrape, absent, Widget } = globalThis.AttendEase;
 
-  const DEFAULTS = { minAttendance: 75, includeMedical: false, widgetPosition: null };
+  const DEFAULTS = {
+    minAttendance: 75,
+    includeMedical: false,
+    internship: { enabled: false, from: '', till: '' },
+    widgetPosition: null,
+  };
+
   const TABLE_TIMEOUT_MS = 20000;
   const storage = globalThis.chrome?.storage?.local;
 
   const state = {
     target: DEFAULTS.minAttendance,
     includeMedical: DEFAULTS.includeMedical,
+    internship: { ...DEFAULTS.internship },
     courses: [],
+    absentEntries: null,
+    absentError: '',
+    loadingAbsent: false,
+    storageBroken: false,
   };
 
   let widget = null;
+
+  const options = () => ({
+    target: state.target,
+    countMedical: state.includeMedical,
+    internshipOD: state.internship.enabled,
+  });
+
+  const hasRange = () =>
+    Boolean(state.internship.from && state.internship.till)
+    && state.internship.from <= state.internship.till;
 
   async function readPrefs() {
     if (!storage) return { ...DEFAULTS };
     try {
       const stored = await storage.get(Object.keys(DEFAULTS));
-      return { ...DEFAULTS, ...stored };
+      return { ...DEFAULTS, ...stored, internship: { ...DEFAULTS.internship, ...stored.internship } };
     } catch (error) {
       console.warn('[AttendEase] Could not read preferences:', error);
       return { ...DEFAULTS };
     }
   }
 
+  const contextAlive = () => Boolean(globalThis.chrome?.runtime?.id);
+
   function writePref(key, value) {
-    storage?.set({ [key]: value }).catch((error) => {
-      console.warn(`[AttendEase] Could not save ${key}:`, error);
-    });
+    if (!storage) return;
+    if (!contextAlive()) {
+      onStorageFailure(new Error('Extension context invalidated.'));
+      return;
+    }
+    try {
+      storage.set({ [key]: value })?.catch(onStorageFailure);
+    } catch (error) {
+      onStorageFailure(error);
+    }
   }
 
-  // resolves with the table once it appears, or null on timeout;
-  // the portal fills it asynchronously so we use both a mutation observer and a poll
+  // settings apply this session but can't persist; warn once rather than on every change
+  function onStorageFailure(error) {
+    if (state.storageBroken) return;
+    state.storageBroken = true;
+    console.warn('[AttendEase] Settings will not persist until this page is reloaded:', error);
+    render();
+  }
+
+  // resolves with the table once it appears (MutationObserver + poll), or null on timeout
   function waitForTable() {
     const immediate = scrape.findTable();
     if (immediate) return Promise.resolve(immediate);
@@ -60,15 +97,68 @@
     });
   }
 
-  function render() {
+  // fetched same-origin, so it rides the session already in the browser
+  async function loadAbsentReport() {
+    if (state.loadingAbsent) return;
+    state.loadingAbsent = true;
+    state.absentError = '';
+    render();
+
+    try {
+      state.absentEntries = await absent.load(absent.currentTermId());
+    } catch (error) {
+      console.warn('[AttendEase] Could not read the absent report:', error);
+      state.absentEntries = null;
+      state.absentError = "Couldn't read the absent report. Open that tab once, then refresh.";
+    } finally {
+      state.loadingAbsent = false;
+      render();
+    }
+  }
+
+  function ensureAbsentReport() {
+    if (state.internship.enabled && hasRange() && !state.absentEntries && !state.loadingAbsent) {
+      loadAbsentReport();
+      return true;
+    }
+    return false;
+  }
+
+  // only actionable warnings; per-course badges already show what was recovered
+  function settingsWarning() {
+    if (state.storageBroken) {
+      return 'Reload this page to save settings: the extension was updated underneath it.';
+    }
+    if (!state.internship.enabled) return '';
+    if (state.internship.from && state.internship.till
+      && state.internship.from > state.internship.till) {
+      return 'That start date is after the end date.';
+    }
+    return state.absentError;
+  }
+
+  function render(emptyMessage) {
+    if (!widget) return;
+
+    const counts = state.internship.enabled && state.absentEntries && hasRange()
+      ? absent.countInRange(state.absentEntries, state.internship.from, state.internship.till)
+      : null;
+
+    const settings = options();
     const courses = state.courses.map((course) =>
-      calc.evaluate(course, state.target, state.includeMedical)
+      calc.evaluate(
+        { ...course, internshipAbsences: counts?.get(absent.normalise(course.courseCode)) || 0 },
+        settings
+      )
     );
 
     widget.render({
       courses,
       target: state.target,
       includeMedical: state.includeMedical,
+      internship: state.internship,
+      warning: settingsWarning(),
+      emptyMessage,
     });
   }
 
@@ -83,7 +173,13 @@
     try {
       const table = await waitForTable();
       state.courses = scrape.parse(table);
-      render();
+      // manual refresh re-reads the absent report too since attendance moves with it
+      if (state.internship.enabled && hasRange()) {
+        state.absentEntries = null;
+        await loadAbsentReport();
+      } else {
+        render();
+      }
     } finally {
       widget.setRefreshing(false);
     }
@@ -93,6 +189,7 @@
     const prefs = await readPrefs();
     state.target = prefs.minAttendance;
     state.includeMedical = prefs.includeMedical;
+    state.internship = { ...prefs.internship };
 
     widget = new Widget({
       onRefresh: refresh,
@@ -107,6 +204,21 @@
         writePref('includeMedical', includeMedical);
         render();
       },
+      onReset: () => {
+        state.target = DEFAULTS.minAttendance;
+        state.includeMedical = DEFAULTS.includeMedical;
+        state.internship = { ...DEFAULTS.internship };
+        state.absentError = '';
+        writePref('minAttendance', state.target);
+        writePref('includeMedical', state.includeMedical);
+        writePref('internship', state.internship);
+        render();
+      },
+      onInternshipChange: (internship) => {
+        state.internship = { ...internship };
+        writePref('internship', state.internship);
+        if (!ensureAbsentReport()) render();
+      },
     });
 
     widget.mount(prefs.widgetPosition);
@@ -115,20 +227,17 @@
 
     const table = await waitForTable();
     if (!table) {
-      widget.render({
-        courses: [],
-        target: state.target,
-        includeMedical: state.includeMedical,
-        emptyMessage: "Couldn't find the attendance table on this page. Try refreshing.",
-      });
+      render("Couldn't find the attendance table on this page. Try refreshing.");
       return;
     }
 
     state.courses = scrape.parse(table);
-    render();
+    if (!ensureAbsentReport()) render();
 
     // clear stale cache keys left by older extension versions
-    storage?.remove(['attendanceData', 'lastUpdated']).catch(() => {});
+    try {
+      storage?.remove(['attendanceData', 'lastUpdated'])?.catch(() => {});
+    } catch { /* context already gone; there is nothing to clean up */ }
   }
 
   globalThis.chrome?.runtime?.onMessage?.addListener((message, _sender, sendResponse) => {

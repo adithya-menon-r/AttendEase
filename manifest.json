@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AttendEase",
-  "version": "2.0.0",
-  "description": "Sleek attendance tracker for Amrita students—instantly shows your safe bunks.",
+  "version": "2.1.0",
+  "description": "Shows how many classes you can skip, or need to attend to reach your target attendance.",
   "permissions": [
     "storage",
     "tabs"
@@ -21,6 +21,7 @@
       "js": [
         "src/calc.js",
         "src/scrape.js",
+        "src/absent.js",
         "src/widget-css.js",
         "src/widget.js",
         "src/content.js"
@@ -34,7 +35,7 @@
     "128": "assets/attend-ease-128.png"
   },
   "action": {
-    "default_title": "Amrita AttendEase",
+    "default_title": "AttendEase",
     "default_icon": {
       "16": "assets/attend-ease-16.png",
       "48": "assets/attend-ease-48.png",

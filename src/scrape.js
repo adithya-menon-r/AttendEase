@@ -1,7 +1,6 @@
 globalThis.AttendEase = globalThis.AttendEase || {};
 
 AttendEase.scrape = (() => {
-  // try multiple selectors; portal markup has changed across versions
   const TABLE_SELECTORS = [
     '#home_tab',
     '#attendance_table',
@@ -27,7 +26,10 @@ AttendEase.scrape = (() => {
   // medical leave column is optional; everything up to percentage is not
   const MIN_CELLS = COLUMN.percentage + 1;
 
-  const cellsOf = (row) => row.querySelectorAll('th, td');
+  const cellsOf = (row) => row.cells;
+
+  // table.rows only walks own sections; avoids sweeping rows from nested date tables
+  const rowsOf = (table) => Array.from(table.rows);
 
   const isDataRow = (row) => cellsOf(row).length >= MIN_CELLS;
 
@@ -56,7 +58,7 @@ AttendEase.scrape = (() => {
     for (const selector of TABLE_SELECTORS) {
       for (const table of document.querySelectorAll(selector)) {
         // row 0 is the header; data starts at row 1
-        const rows = Array.from(table.querySelectorAll('tr')).slice(1);
+        const rows = rowsOf(table).slice(1);
         if (rows.some(isDataRow)) return table;
       }
     }
@@ -85,18 +87,19 @@ AttendEase.scrape = (() => {
       dutyLeave: int(cells, COLUMN.dutyLeave),
       absent: int(cells, COLUMN.absent),
       medical: int(cells, COLUMN.medical),
+      internshipAbsences: 0,
     };
   }
 
   // returns every parseable course in portal order
   function parse(table) {
     if (!table) return [];
-    return Array.from(table.querySelectorAll('tr'))
+    return rowsOf(table)
       .slice(1)
       .map(parseRow)
       .filter(Boolean)
       .map((course, index) => ({ ...course, id: index }));
   }
 
-  return { findTable, parse };
+  return { findTable, parse, lines, rowsOf };
 })();

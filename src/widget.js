@@ -43,6 +43,7 @@ AttendEase.Widget = (() => {
     refresh: ['M13.5 8a5.5 5.5 0 1 1-1.61-3.89', 'M13.5 2.5V5H11'],
     chevron: ['M4 6.5 8 10.5l4-4'],
     close: ['m4 4 8 8', 'M12 4l-8 8'],
+    sliders: ['M2 5h12', 'M2 11h12', 'M9.5 3v4', 'M5.5 9v4'],
   };
 
   return class Widget {
@@ -59,6 +60,7 @@ AttendEase.Widget = (() => {
       this.root = null;
       this.position = { x: 0, y: 0 };
       this.collapsed = false;
+      this.settingsOpen = false;
       this.onWindowResize = () => this.applyPosition();
     }
 
@@ -100,22 +102,48 @@ AttendEase.Widget = (() => {
         el('header', { class: 'header' },
           el('span', { class: 'brand', text: 'AttendEase' }),
           el('div', { class: 'actions' },
+            button('settings', 'Settings', ICONS.sliders),
             button('refresh', 'Refresh', ICONS.refresh),
             button('collapse', 'Collapse', ICONS.chevron),
             button('close', 'Hide', ICONS.close))),
         el('div', { class: 'body' },
-          el('div', { class: 'controls' },
-            el('label', { class: 'field' },
-              el('span', { class: 'field__label', text: 'Target' }),
-              el('select', { class: 'select', 'data-control': 'target' },
-                ...Widget.TARGETS.map((value) =>
-                  el('option', { value: String(value), text: `${value}%` })))),
-            el('label', { class: 'switch', title: 'Count medical leave as attended' },
-              el('input', { type: 'checkbox', 'data-control': 'medical' }),
-              el('span', { class: 'switch__track' }, el('span', { class: 'switch__thumb' })),
-              el('span', { class: 'switch__label', text: 'Medical' }))),
+          this.buildSettings(),
           el('ul', { class: 'list' })));
     }
+
+    buildSettings() {
+      const toggle = (name) =>
+        el('label', { class: 'switch' },
+          el('input', { type: 'checkbox', 'data-control': name }),
+          el('span', { class: 'switch__track' }, el('span', { class: 'switch__thumb' })));
+
+      const row = (label, control) =>
+        el('div', { class: 'setting' },
+          el('span', { class: 'setting__label', text: label }),
+          control);
+
+      // <input type="date"> uses YYYY-MM-DD; display order follows browser locale and can't be overridden
+      const date = (name, label) =>
+        el('label', { class: 'datefield' },
+          el('span', { class: 'datefield__label', text: label }),
+          el('input', { type: 'date', class: 'dateinput', 'data-control': name }));
+
+      return el('div', { class: 'settings' },
+        el('p', { class: 'settings__warning' }),
+        row('Target attendance',
+          el('select', { class: 'select', 'data-control': 'target' },
+            ...Widget.TARGETS.map((value) =>
+              el('option', { value: String(value), text: `${value}%` })))),
+        row('Count medical leave', toggle('medical')),
+        el('div', { class: 'settings__rule' }),
+        row('Internship OD', toggle('internship')),
+        el('div', { class: 'settings__dates' }, date('from', 'Start'), date('till', 'End')),
+        el('div', { class: 'settings__footer' },
+          el('button', {
+            class: 'linkbtn', type: 'button', 'data-action': 'reset', text: 'Reset all settings',
+          })));
+    }
+
 
     // progress bar with a target marker; returns handles to update both
     buildBar() {
@@ -138,6 +166,7 @@ AttendEase.Widget = (() => {
       this.$('.actions').addEventListener('click', (event) => {
         const action = event.target.closest('[data-action]')?.dataset.action;
         if (action === 'refresh') this.handlers.onRefresh?.();
+        else if (action === 'settings') this.toggleSettings();
         else if (action === 'collapse') this.toggleCollapsed();
         else if (action === 'close') this.hide();
       });
@@ -150,10 +179,23 @@ AttendEase.Widget = (() => {
         this.handlers.onMedicalChange?.(event.target.checked);
       });
 
+      this.$('[data-action="reset"]').addEventListener('click', () => {
+        this.handlers.onReset?.();
+      });
+
+      for (const name of ['internship', 'from', 'till']) {
+        this.$(`[data-control="${name}"]`).addEventListener('change', () => {
+          this.handlers.onInternshipChange?.({
+            enabled: this.$('[data-control="internship"]').checked,
+            from: this.$('[data-control="from"]').value,
+            till: this.$('[data-control="till"]').value,
+          });
+        });
+      }
+
       this.bindDragging();
     }
 
-    // pointer capture keeps move/up on the header — no document listeners, touch works for free
     bindDragging() {
       const widget = this.$('.widget');
       const header = this.$('.header');
@@ -212,6 +254,14 @@ AttendEase.Widget = (() => {
       else this.show();
     }
 
+    toggleSettings() {
+      this.settingsOpen = !this.settingsOpen;
+      this.$('.widget').classList.toggle('is-settings-open', this.settingsOpen);
+      const button = this.$('[data-action="settings"]');
+      button.title = this.settingsOpen ? 'Close settings' : 'Settings';
+      button.setAttribute('aria-label', button.title);
+    }
+
     toggleCollapsed() {
       this.collapsed = !this.collapsed;
       this.$('.widget').classList.toggle('is-collapsed', this.collapsed);
@@ -231,10 +281,21 @@ AttendEase.Widget = (() => {
 
     render(state) {
       if (!this.root) return;
-      const { courses, target, includeMedical, emptyMessage } = state;
+      const { courses, target, includeMedical, internship, emptyMessage } = state;
 
       this.$('[data-control="target"]').value = String(target);
       this.$('[data-control="medical"]').checked = includeMedical;
+      this.$('[data-control="internship"]').checked = internship.enabled;
+
+      for (const [name, value] of [['from', internship.from], ['till', internship.till]]) {
+        const input = this.$(`[data-control="${name}"]`);
+        // only assign when it differs, so typing in the field is never fought
+        if (input.value !== value) input.value = value;
+        input.disabled = !internship.enabled;
+      }
+
+      this.$('.settings__dates').classList.toggle('is-disabled', !internship.enabled);
+      this.$('.settings__warning').textContent = state.warning || '';
 
       this.$('.list').replaceChildren(
         ...(courses.length === 0
@@ -247,6 +308,16 @@ AttendEase.Widget = (() => {
       const bar = this.buildBar();
       bar.set(course.percentage, target);
 
+      // the badge sits with the tally it modifies rather than by the course code
+      const badge = course.recoveredOD > 0
+        ? el('span', {
+            class: 'course__od',
+            text: `+${course.recoveredOD} OD`,
+            title: `${course.recoveredOD} internship ${course.recoveredOD === 1 ? 'class' : 'classes'}`
+              + ' the portal could not credit',
+          })
+        : null;
+
       return el('li', { class: `course is-${course.status}` },
         el('div', { class: 'course__top' },
           el('span', { class: 'course__code', text: course.courseCode || `Course ${course.serialNumber}` }),
@@ -254,11 +325,11 @@ AttendEase.Widget = (() => {
         el('p', { class: 'course__name', text: course.courseName, title: course.courseName }),
         bar.node,
         el('div', { class: 'course__meta' },
-          el('span', {
-            class: 'course__count',
-            text: `${course.attended}/${course.total} · ${course.absent} absent`,
-            title: Widget.describeTally(course, includeMedical),
-          }),
+          el('span', { class: 'course__count', title: Widget.describeTally(course, includeMedical) },
+            el('span', { text: `${course.attended}/${course.total}` }),
+            badge,
+            // portal's Absent column still counts OD-approved classes, so we show effectiveAbsent instead
+            el('span', { text: `· ${course.effectiveAbsent} absent` })),
           Widget.buildVerdict(course)));
     }
 
@@ -266,8 +337,10 @@ AttendEase.Widget = (() => {
     static describeTally(course, includeMedical) {
       const parts = [`${course.present} present`];
       if (course.dutyLeave > 0) parts.push(`${course.dutyLeave} duty leave`);
+      if (course.recoveredOD > 0) parts.push(`${course.recoveredOD} uncredited OD`);
       if (includeMedical && course.medical > 0) parts.push(`${course.medical} medical leave`);
-      return `${parts.join(' + ')} of ${course.total} classes`;
+      return `${parts.join(' + ')} of ${course.total} classes`
+        + ` · portal shows ${course.absent} absent`;
     }
 
     static buildVerdict(course) {
