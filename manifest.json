@@ -1,41 +1,44 @@
 {
   "manifest_version": 3,
   "name": "AttendEase",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "description": "Sleek attendance tracker for Amrita students—instantly shows your safe bunks.",
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "attendease@midhunan.extension"
-    }
-  },
   "permissions": [
-    "activeTab",
     "storage",
     "tabs"
   ],
   "host_permissions": [
     "https://students.amrita.edu/*"
   ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["https://students.amrita.edu/client/class-attendance*"],
-      "js": ["content.js"],
-      "css": ["styles.css"],
+      "matches": [
+        "https://students.amrita.edu/client/class-attendance*"
+      ],
+      "js": [
+        "src/calc.js",
+        "src/scrape.js",
+        "src/widget-css.js",
+        "src/widget.js",
+        "src/content.js"
+      ],
       "run_at": "document_end"
     }
   ],
   "icons": {
-    "16": "attend-ease-16.png",
-    "48": "attend-ease-48.png",
-    "128": "attend-ease-128.png"
+    "16": "assets/attend-ease-16.png",
+    "48": "assets/attend-ease-48.png",
+    "128": "assets/attend-ease-128.png"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_title": "Amrita AttendEase",
     "default_icon": {
-      "16": "attend-ease-16.png",
-      "48": "attend-ease-48.png",
-      "128": "attend-ease-128.png"
+      "16": "assets/attend-ease-16.png",
+      "48": "assets/attend-ease-48.png",
+      "128": "assets/attend-ease-128.png"
     }
   }
 }
