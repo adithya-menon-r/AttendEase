@@ -392,8 +392,6 @@ AttendEase.Widget = (() => {
         badge.hidden = next.recoveredOD <= 0;
         if (next.recoveredOD > 0) {
           badge.textContent = `+${next.recoveredOD} OD`;
-          badge.title = `${next.recoveredOD} internship`
-            + ` ${next.recoveredOD === 1 ? 'class' : 'classes'} the portal could not credit`;
           if (appearing && !entering && !Widget.reducedMotion()) {
             badge.animate([{ transform: 'scale(.7)', opacity: 0 }, { transform: 'none', opacity: 1 }],
               { duration: 200, easing: 'ease-out' });
@@ -415,14 +413,12 @@ AttendEase.Widget = (() => {
       return { node, update };
     }
 
-    // breakdown shown on hover over the tally
     static describeTally(course, includeMedical) {
       const parts = [`${course.present} present`];
-      if (course.dutyLeave > 0) parts.push(`${course.dutyLeave} duty leave`);
-      if (course.recoveredOD > 0) parts.push(`${course.recoveredOD} uncredited OD`);
-      if (includeMedical && course.medical > 0) parts.push(`${course.medical} medical leave`);
-      return `${parts.join(' + ')} of ${course.total} classes`
-        + ` · portal shows ${course.absent} absent`;
+      if (course.dutyLeave > 0) parts.push(`${course.dutyLeave} OD`);
+      if (course.recoveredOD > 0) parts.push(`${course.recoveredOD} uncredited intern OD`);
+      if (includeMedical && course.medical > 0) parts.push(`${course.medical} Medical`);
+      return parts.length > 1 ? parts.join(' + ') : '';
     }
 
   };
