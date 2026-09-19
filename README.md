@@ -7,6 +7,8 @@ Forked from and improved upon [midhunann/AttendEase](https://github.com/midhunan
 [![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/adithya-menon-r/AttendEase)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](/LICENSE)
 
+![AttendEase](https://github.com/user-attachments/assets/25b87a24-ab4c-4ab7-9326-c0e6adda50d2)
+
 ## Installation
 
 ### Chromium Based

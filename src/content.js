@@ -109,7 +109,7 @@
     } catch (error) {
       console.warn('[AttendEase] Could not read the absent report:', error);
       state.absentEntries = null;
-      state.absentError = "Couldn't read the absent report. Open that tab once, then refresh.";
+      state.absentError = "Couldn't load the absent report data. Open the absent report tab, then refresh.";
     } finally {
       state.loadingAbsent = false;
       render();
@@ -228,7 +228,7 @@
 
     const table = await waitForTable();
     if (!table) {
-      render("Couldn't find the attendance table on this page. Try refreshing.");
+      render("Couldn't load attendance data for this page. Try refreshing.");
       return;
     }
 

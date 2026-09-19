@@ -54,7 +54,7 @@ AttendEase.css = /* css */ `
 .widget {
   display: flex;
   flex-direction: column;
-  max-height: 70vh;
+  max-height: 75vh;
   background: var(--surface);
   border-radius: 12px;
   box-shadow:
@@ -86,7 +86,11 @@ AttendEase.css = /* css */ `
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--shell-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
 }
+.brand:hover { filter: brightness(1.4); }
 
 .actions { display: flex; align-items: center; gap: 1px; }
 

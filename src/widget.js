@@ -104,7 +104,7 @@ AttendEase.Widget = (() => {
 
       return el('div', { class: 'widget' },
         el('header', { class: 'header' },
-          el('span', { class: 'brand', text: 'AttendEase' }),
+          el('a', { class: 'brand', text: 'AttendEase', href: 'https://github.com/adithya-menon-r/AttendEase', target: '_blank' }),
           el('div', { class: 'actions' },
             button('settings', 'Settings', ICONS.sliders),
             button('refresh', 'Refresh', ICONS.refresh),
@@ -231,7 +231,7 @@ AttendEase.Widget = (() => {
 
       header.addEventListener('pointerdown', (event) => {
         if (event.button !== 0) return;
-        if (event.target.closest('button, select, label, input')) return;
+        if (event.target.closest('button, select, label, input, a')) return;
 
         origin = {
           x: event.clientX - this.position.x,
